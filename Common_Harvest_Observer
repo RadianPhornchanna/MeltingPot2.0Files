@@ -1,3 +1,9 @@
+"""
+CODE TO RUN 
+source ~/mp_env_311/bin/activate
+PYTHONPATH=. python3 see_agents.py
+"""
+
 import PIL.Image
 from meltingpot import substrate
 import numpy as np
