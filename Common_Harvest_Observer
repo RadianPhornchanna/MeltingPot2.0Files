@@ -1,0 +1,55 @@
+import PIL.Image
+from meltingpot import substrate
+import numpy as np
+import pygame
+
+# 1. SWITCHING THE WORLD: We change "clean_up" to "commons_harvest__open"
+# This is the classic apple harvesting game.
+env = substrate.build("commons_harvest__open", roles=['default'] * 7)
+timestep = env.reset()
+
+pygame.init()
+screen = pygame.display.set_mode((800, 800))
+clock = pygame.time.Clock()
+
+print("--- COMMONS HARVEST MODE ---")
+print("Watch the agents try to harvest apples without depleting the patch!")
+
+try:
+    for step in range(3000):
+        # AUTOMATED POLICY: Agents wander towards the nearest apple
+        # In this game, Action 1-4 are Move, 5-6 are Rotate.
+        actions = [np.random.randint(1, 5) for _ in range(7)]
+
+        timestep = env.step(actions)
+
+        # Check for Total Harvest
+        total_apples = sum(timestep.reward)
+        if total_apples > 0:
+            print(f"Step {step}: {total_apples} apples eaten!")
+
+        # Visuals
+        obs = timestep.observation[0]
+        img_data = obs.get('WORLD.RGB', obs.get('RGB'))
+        if img_data is not None:
+            img_surf = pygame.surfarray.make_surface(img_data.transpose(1, 0, 2))
+            screen.blit(pygame.transform.scale(img_surf, (800, 800)), (0, 0))
+
+            # Data Overlay
+            font = pygame.font.SysFont('Arial', 24)
+            text = font.render(f'Step: {step} | Harvesting Apples...', True, (255, 255, 255))
+            screen.blit(text, (20, 20))
+
+            pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                break
+
+        clock.tick(20)
+
+except Exception as e:
+    print(f"Error: {e}")
+finally:
+    pygame.quit()
+    env.close()
