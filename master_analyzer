@@ -1,0 +1,57 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+
+# 1. Load all 5 files
+file_names = ['resilience_baseline_1.csv', 'resilience_baseline_2.csv', 'resilience_baseline_3.csv', 'resilience_baseline_4.csv', 'resilience_baseline_5.csv']
+all_data = []
+
+for f in file_names:
+    df = pd.read_csv(f)
+    # We add a 'run' column just to keep track
+    df['run'] = f
+    all_data.append(df)
+
+# Combine them into one big table
+master_df = pd.concat(all_data)
+
+# 2. CALCULATE THE AVERAGE FOR EVERY STEP
+# This groups all "Step 10s" together, all "Step 20s" together, etc.
+summary = master_df.groupby('step').agg({
+    'total_apples': ['mean', 'std'],
+    'gini_index': ['mean', 'std']
+}).reset_index()
+
+# Flatten the names for easier plotting
+summary.columns = ['step', 'apples_avg', 'apples_std', 'gini_avg', 'gini_std']
+
+# 3. CREATE THE SHADOW PLOT
+plt.figure(figsize=(12, 6))
+
+# Plot 1: Total Apples (Sustenance)
+plt.subplot(1, 2, 1)
+plt.plot(summary['step'], summary['apples_avg'], color='green', label='Average Apples')
+# This adds the "Shadow" (Variance)
+plt.fill_between(summary['step'], 
+                 summary['apples_avg'] - summary['apples_std'], 
+                 summary['apples_avg'] + summary['apples_std'], 
+                 color='green', alpha=0.2, label='Variation')
+plt.title('Baseline: Average Wealth')
+plt.ylabel('Apples')
+plt.legend()
+
+# Plot 2: Gini Index (Inequality)
+plt.subplot(1, 2, 2)
+plt.plot(summary['step'], summary['gini_avg'], color='red', label='Average Inequality')
+plt.fill_between(summary['step'], 
+                 summary['gini_avg'] - summary['gini_std'], 
+                 summary['gini_avg'] + summary['gini_std'], 
+                 color='red', alpha=0.2)
+plt.title('Baseline: Social Stability')
+plt.ylabel('Gini Index')
+plt.xlabel('Step')
+plt.legend()
+
+plt.tight_layout()
+plt.savefig('master_baseline_report.png')
+print("Master Analysis Complete! Open 'master_baseline_report.png' to see your results.")
