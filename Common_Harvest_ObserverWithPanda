@@ -1,0 +1,82 @@
+import PIL.Image
+from meltingpot import substrate
+import numpy as np
+import pygame
+import csv
+import os
+
+# 1. Environment Setup
+env_name = "commons_harvest__open"
+env = substrate.build(env_name, roles=['default'] * 7)
+timestep = env.reset()
+
+# 2. CSV Logger Setup
+log_file = "resilience_baseline.csv"
+headers = ['step', 'total_apples', 'gini_index', 'avg_satiation', 'agent_0_score', 'agent_1_score', 'agent_2_score', 'agent_3_score', 'agent_4_score', 'agent_5_score', 'agent_6_score']
+
+# Create the file and write the header
+if not os.path.exists(log_file):
+    with open(log_file, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(headers)
+
+def calculate_gini(rewards):
+    """Calculates the Gini Index (0 = perfect equality, 1 = total inequality)"""
+    rewards = np.array(rewards, dtype=float)
+    if np.sum(rewards) == 0: return 0
+    sorted_rewards = np.sort(rewards)
+    n = len(rewards)
+    index = np.arange(1, n + 1)
+    return ((np.sum((2 * index - n  - 1) * sorted_rewards)) / (n * np.sum(sorted_rewards)))
+
+# 3. Pygame Setup
+pygame.init()
+screen = pygame.display.set_mode((800, 800))
+clock = pygame.time.Clock()
+
+print(f"--- DATA COLLECTION ACTIVE ---")
+print(f"Logging data to: {log_file}")
+
+cumulative_rewards = np.zeros(7)
+
+try:
+    with open(log_file, 'a', newline='') as f:
+        writer = csv.writer(f)
+
+        for step in range(2000):
+            # Automated Heuristic Actions (move randomly for now)
+            actions = [np.random.randint(1, 5) for _ in range(7)]
+            timestep = env.step(actions)
+
+            # Update Rewards
+            cumulative_rewards += np.array(timestep.reward)
+
+            # LOGGING: Record data every 10 steps
+            if step % 10 == 0:
+                total_apples = np.sum(cumulative_rewards)
+                gini = calculate_gini(cumulative_rewards)
+
+                # Write row to CSV
+                row = [step, total_apples, round(gini, 3), 0] + list(cumulative_rewards)
+                writer.writerow(row)
+                print(f"Step {step} logged. Total Apples: {total_apples} | Gini: {round(gini, 3)}", end='\r')
+
+            # Render visuals
+            obs = timestep.observation[0]
+            img_data = obs.get('WORLD.RGB', obs.get('RGB'))
+            if img_data is not None:
+                img_surf = pygame.surfarray.make_surface(img_data.transpose(1, 0, 2))
+                screen.blit(pygame.transform.scale(img_surf, (800, 800)), (0, 0))
+                pygame.display.flip()
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT: break
+            clock.tick(30)
+
+except Exception as e:
+    print(f"\nError: {e}")
+finally:
+    print(f"\n--- DATA COLLECTION COMPLETE ---")
+    print(f"Check {log_file} for your baseline metrics.")
+    pygame.quit()
+    env.close()
