@@ -1,0 +1,76 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import glob
+import numpy as np
+
+def analyze_resilience():
+    # 1. Updated to match your exact naming convention
+    files = sorted(glob.glob("resilience_baseline_*.csv"))
+
+    if not files:
+        print("❌ Error: No files found! Check if they are named 'resilience_baseline_1.csv', etc.")
+        # Listing files in directory to help you debug
+        print(f"Files found in folder: {glob.glob('*.csv')}")
+        return
+
+    print(f"📊 Found {len(files)} resilience baseline runs. Processing...")
+
+    # 2. Load and Combine Data
+    all_runs = [pd.read_csv(f) for f in files]
+    combined = pd.concat(all_runs)
+
+    # Calculate Mean and Standard Deviation
+    mean_data = combined.groupby('step').mean().reset_index()
+    std_data = combined.groupby('step').std().reset_index()
+
+    # Calculate Average Final Scores
+    final_scores_list = [run.iloc[-1] for run in all_runs]
+    final_df = pd.DataFrame(final_scores_list)
+    agent_cols = [f'agent_{i}_score' for i in range(7)]
+    avg_final_scores = final_df[agent_cols].mean()
+    error_bars = final_df[agent_cols].std()
+
+    # 3. Create the Visuals (Matching the Professional Style)
+    plt.figure(figsize=(18, 6))
+
+    # --- PANEL 1: Total Apples (System Efficiency) ---
+    plt.subplot(1, 3, 1)
+    plt.plot(mean_data['step'], mean_data['total_apples'], color='#1f77b4', label='Mean Resilience Baseline', linewidth=2)
+    plt.fill_between(mean_data['step'],
+                     mean_data['total_apples'] - std_data['total_apples'],
+                     mean_data['total_apples'] + std_data['total_apples'],
+                     color='#1f77b4', alpha=0.15)
+    plt.title('Total Apples (Resilience Baseline)', fontsize=14, fontweight='bold')
+    plt.xlabel('Steps')
+    plt.ylabel('Total Apples')
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.legend()
+
+    # --- PANEL 2: Gini Index (Social Inequality) ---
+    plt.subplot(1, 3, 2)
+    plt.plot(mean_data['step'], mean_data['gini_index'], color='#9467bd', linewidth=2)
+    plt.title('Gini Index (Baseline)', fontsize=14, fontweight='bold')
+    plt.xlabel('Steps')
+    plt.ylabel('Gini Coefficient')
+    plt.ylim(0, 1)
+    plt.grid(True, linestyle='--', alpha=0.6)
+
+    # --- PANEL 3: Individual Agent Performance ---
+    plt.subplot(1, 3, 3)
+    avg_final_scores.plot(kind='bar', yerr=error_bars, color='skyblue', capsize=5, edgecolor='black')
+    plt.title('Final Score per Agent (Baseline)', fontsize=14, fontweight='bold')
+    plt.xlabel('Agent ID')
+    plt.ylabel('Final Apple Count')
+    plt.xticks(range(7), [f'A{i}' for i in range(7)], rotation=0)
+    plt.grid(axis='y', linestyle='--', alpha=0.6)
+
+    plt.tight_layout()
+
+    # Save the result
+    output_name = 'resilience_baseline_report.png'
+    plt.savefig(output_name, dpi=300)
+    print(f"✅ Success! Report saved as: {output_name}")
+    plt.show()
+
+if __name__ == "__main__":
+    analyze_resilience()
