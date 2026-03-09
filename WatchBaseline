@@ -1,0 +1,53 @@
+import numpy as np
+from meltingpot import substrate
+import pygame
+import sys
+
+def watch_baseline():
+    # 1. Setup Environment
+    env_name = 'commons_harvest__open'
+    roles = ['default'] * 7
+    env = substrate.build(env_name, roles=roles)
+
+    # 2. Setup Visuals
+    pygame.init()
+    screen_size = (800, 600)
+    display = pygame.display.set_mode(screen_size)
+    pygame.display.set_caption("Watching Baseline (Fair Play)")
+    clock = pygame.time.Clock()
+
+    num_actions = env.action_spec()[0].num_values
+    timestep = env.reset()
+
+    print("Watching Baseline... (Close the window or press Ctrl+C to stop)")
+
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+
+        # 3. FAIR LOGIC: Everyone has the same limited movement (0-3)
+        # No one is checking "if i == 5" here.
+        actions = [np.random.randint(0, min(4, num_actions)) for _ in range(7)]
+
+        timestep = env.step(actions)
+
+        # 4. Render the WORLD.RGB from the first agent's perspective
+        rgb_scene = timestep.observation[0]['WORLD.RGB']
+
+        surface = pygame.surfarray.make_surface(rgb_scene.transpose(1, 0, 2))
+        surface = pygame.transform.scale(surface, screen_size)
+        display.blit(surface, (0, 0))
+        pygame.display.flip()
+
+        clock.tick(20) # 20 Frames Per Second
+
+        if timestep.last():
+            timestep = env.reset()
+
+    env.close()
+    pygame.quit()
+
+if __name__ == "__main__":
+    watch_baseline()
