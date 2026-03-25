@@ -1,0 +1,120 @@
+import numpy as np
+import pygame
+import sys
+import csv
+import matplotlib.pyplot as plt
+from meltingpot.python import substrate
+
+# --- RESEARCH CONFIGURATION ---
+SUBSTRATE_NAME = 'commons_harvest__open'
+NUM_STEPS = 2000
+TOTAL_AGENTS = 7
+DISRUPTOR_IDS = [5, 6]
+NUM_TRIALS = 5
+SCALE = 4  # Keeping the window small
+
+def run_single_trial(trial_num):
+    print(f"\n>>> STARTING TRIAL {trial_num + 1} of {NUM_TRIALS}...")
+    env = substrate.build(SUBSTRATE_NAME, roles=['default'] * TOTAL_AGENTS)
+    timestep = env.reset()
+
+    # Initialize reward tracking for this specific trial
+    trial_rewards = [0.0] * TOTAL_AGENTS
+
+    pygame.init()
+    screen_array = timestep.observation[0]['WORLD.RGB']
+    h, w, _ = screen_array.shape
+    screen = pygame.display.set_mode((w * SCALE, h * SCALE))
+    pygame.display.set_caption(f"Trial {trial_num+1}/5")
+    clock = pygame.time.Clock()
+
+    for step in range(NUM_STEPS):
+        # 1. ASYMMETRIC LOGIC
+        # Normal Agents (0-4): Move only (0-6)
+        actions = [np.random.randint(0, 7) for _ in range(TOTAL_AGENTS)]
+        # Disruptors (5-6): Move + Zap (0-7)
+        for d_id in DISRUPTOR_IDS:
+            actions[d_id] = np.random.randint(0, 8)
+
+        # 2. STEP 1
+        timestep = env.step(actions)
+        for i in range(TOTAL_AGENTS):
+            trial_rewards[i] += timestep.reward[i]
+
+        # 3. SPEED BOOST (Disruptors move again)
+        boosted_actions = [0] * TOTAL_AGENTS
+        for d_id in DISRUPTOR_IDS:
+            boosted_actions[d_id] = np.random.randint(0, 8)
+
+        timestep = env.step(boosted_actions)
+        for i in range(TOTAL_AGENTS):
+            trial_rewards[i] += timestep.reward[i]
+
+        # 4. RENDER (Updated every 5 steps to speed up the batch)
+        if step % 5 == 0:
+            obs = timestep.observation[0]['WORLD.RGB']
+            surf = pygame.surfarray.make_surface(obs.swapaxes(0, 1))
+            scaled_surf = pygame.transform.scale(surf, (w * SCALE, h * SCALE))
+            screen.blit(scaled_surf, (0, 0))
+            pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+    # --- SAVE DATA TO CSV ---
+    filename = f"trial_{trial_num + 1}_data.csv"
+    with open(filename, mode='w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['Agent_ID', 'Role', 'Apples_Collected'])
+        for i in range(TOTAL_AGENTS):
+            role = "Disruptor" if i in DISRUPTOR_IDS else "Normal"
+            writer.writerow([i, role, trial_rewards[i]])
+
+    print(f"Trial {trial_num+1} saved to {filename}")
+    pygame.quit()
+    return trial_rewards
+
+def create_summary_chart(all_data):
+    # Calculate the average score for each agent across the 5 trials
+    data_array = np.array(all_data)
+    avg_per_agent = np.mean(data_array, axis=0)
+
+    agents = [str(i) for i in range(TOTAL_AGENTS)]
+
+    # Define colors: Light red/salmon for Normal, Dark brown/maroon for Disruptors
+    # This matches the "Risk" aesthetic in your example image
+    colors = []
+    for i in range(TOTAL_AGENTS):
+        if i in DISRUPTOR_IDS:
+            colors.append('#6b3e3e') # Dark Disruptor color
+        else:
+            colors.append('#e58e7d') # Lighter Normal agent color
+
+    plt.figure(figsize=(10, 7))
+    bars = plt.bar(agents, avg_per_agent, color=colors)
+
+    # Formatting to match your image
+    plt.xlabel('Agent', fontsize=12)
+    plt.ylabel('Average Score', fontsize=12)
+    plt.title('2. Disrupted Performance\n(Agents 5 and 6 are the Disruptors)', fontsize=14)
+    plt.ylim(0, max(avg_per_agent) + 5) # Give some space at the top
+
+    # Add the actual score number on top of each bar for clarity
+    for bar in bars:
+        yval = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2, yval + 0.5, round(yval, 1), ha='center', va='bottom')
+
+    plt.tight_layout()
+    plt.savefig('resilience_baseline_formatted.png')
+    print("\n[SUCCESS] Chart saved as 'resilience_baseline_formatted.png'")
+
+if __name__ == "__main__":
+    final_results = []
+    for t in range(NUM_TRIALS):
+        results = run_single_trial(t)
+        final_results.append(results)
+
+    create_summary_chart(final_results)
+    print("All trials complete. Check your folder for CSVs and the PNG chart.")
