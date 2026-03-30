@@ -1,0 +1,87 @@
+import numpy as np
+import pygame
+import sys
+import pandas as pd
+import matplotlib.pyplot as plt
+from meltingpot.python import substrate
+
+# --- CONFIGURATION ---
+SUBSTRATE_NAME = 'commons_harvest__open'
+NUM_TRIALS = 5
+NUM_STEPS = 2000
+TOTAL_AGENTS = 7
+SCALE = 3
+FPS = 120
+
+def run_baseline():
+    pygame.init()
+    all_results = []
+
+    for trial_num in range(1, NUM_TRIALS + 1):
+        print(f"Starting Baseline Trial {trial_num}/{NUM_TRIALS}...")
+        env = substrate.build(SUBSTRATE_NAME, roles=['default'] * TOTAL_AGENTS)
+        timestep = env.reset()
+
+        agent_scores = np.zeros(TOTAL_AGENTS)
+
+        # Setup Pygame Display
+        raw_obs = timestep.observation[0]['WORLD.RGB']
+        h, w, _ = raw_obs.shape
+        screen = pygame.display.set_mode((w * SCALE, h * SCALE))
+        clock = pygame.time.Clock()
+
+        for step in range(NUM_STEPS):
+            # 1. CLEAN LOGIC: No speed penalties, no floods.
+            # All agents move every single step.
+            actions = [np.random.randint(0, 7) for _ in range(TOTAL_AGENTS)]
+
+            # 2. ENVIRONMENT STEP
+            timestep = env.step(actions)
+            agent_scores += timestep.reward
+
+            # 3. VISUALS (Standard Green Map)
+            if step % 2 == 0:  # Render every 2nd frame to keep it fast
+                obs = timestep.observation[0]['WORLD.RGB']
+                surf = pygame.surfarray.make_surface(obs.swapaxes(0, 1))
+                scaled_map = pygame.transform.scale(surf, (w * SCALE, h * SCALE))
+                screen.blit(scaled_map, (0, 0))
+                pygame.display.set_caption(f"Baseline | Trial {trial_num} | Step {step}")
+                pygame.display.flip()
+
+            clock.tick(FPS)
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit(); sys.exit()
+
+        # Save Trial Data
+        trial_data = {f'Agent_{i}': agent_scores[i] for i in range(TOTAL_AGENTS)}
+        trial_data['Trial'] = f'Trial {trial_num}'
+        all_results.append(trial_data)
+
+    # --- DATA EXPORT & CHARTING ---
+    df = pd.DataFrame(all_results)
+    df.to_csv('baseline_results.csv', index=False)
+
+    # Calculate Averages for the Poster
+    agent_cols = [f'Agent_{i}' for i in range(TOTAL_AGENTS)]
+    averages = df[agent_cols].mean()
+
+    plt.figure(figsize=(10, 7))
+    # Use a neutral Green theme for the Baseline
+    bars = plt.bar([str(i) for i in range(TOTAL_AGENTS)], averages, color='#A9DFBF', edgecolor='#1D8348')
+
+    plt.title('Baseline Performance: Standard Conditions (No Disruptions)', fontsize=14)
+    plt.xlabel('Agent ID', fontsize=12)
+    plt.ylabel('Average Apples Collected', fontsize=12)
+
+    for bar in bars:
+        plt.text(bar.get_x() + bar.get_width()/2., bar.get_height() + 0.3,
+                 f'{bar.get_height():.1f}', ha='center', fontweight='bold')
+
+    plt.savefig('baseline_chart.png')
+    plt.show()
+    print("Baseline CSV and Chart generated.")
+
+if __name__ == "__main__":
+    run_baseline()
