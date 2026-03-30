@@ -1,0 +1,120 @@
+import numpy as np
+import pygame
+import sys
+import pandas as pd
+import matplotlib.pyplot as plt
+from meltingpot.python import substrate
+
+# --- CONFIGURATION ---
+SUBSTRATE_NAME = 'commons_harvest__open'
+NUM_TRIALS = 5
+NUM_STEPS = 2000
+TOTAL_AGENTS = 7
+SCALE = 3  # Adjusted scale to fit screen better with UI
+FPS = 120  # Fast-forward speed
+
+def run_study():
+    pygame.init()
+    all_results = []
+
+    for trial_num in range(1, NUM_TRIALS + 1):
+        print(f"Starting Trial {trial_num}/{NUM_TRIALS}...")
+        env = substrate.build(SUBSTRATE_NAME, roles=['default'] * TOTAL_AGENTS)
+        timestep = env.reset()
+
+        # Track individual agent rewards for the CSV
+        agent_scores = np.zeros(TOTAL_AGENTS)
+
+        # Setup Pygame Display for this trial
+        raw_obs = timestep.observation[0]['WORLD.RGB']
+        h, w, _ = raw_obs.shape
+        screen = pygame.display.set_mode(((w * SCALE) + 60, h * SCALE))
+        clock = pygame.time.Clock()
+
+        for step in range(NUM_STEPS):
+            # 1. FLOOD GAUGE LOGIC
+            if step < 300:
+                water_level = 0.0
+            elif step < 1200:
+                water_level = (step - 300) / 900
+            else:
+                water_level = 1.0
+
+            # 2. SPEED PENALTY (Packet Loss Simulation)
+            if water_level > 0.7:
+                move_ready = (step % 3 == 0) # 33% speed
+            elif water_level > 0.3:
+                move_ready = (step % 2 == 0) # 50% speed
+            else:
+                move_ready = True # Full speed
+
+            if move_ready:
+                actions = [np.random.randint(0, 7) for _ in range(TOTAL_AGENTS)]
+            else:
+                actions = [0] * TOTAL_AGENTS
+
+            # 3. ENVIRONMENT STEP
+            timestep = env.step(actions)
+            agent_scores += timestep.reward # Accumulate individual scores
+
+            # 4. VISUALS
+            obs = timestep.observation[0]['WORLD.RGB'].copy()
+            surf = pygame.surfarray.make_surface(obs.swapaxes(0, 1))
+
+            # Apply Blue Water Tint
+            if water_level > 0:
+                overlay = pygame.Surface((w, h))
+                overlay.set_alpha(int(water_level * 160))
+                overlay.fill((0, 100, 255))
+                surf.blit(overlay, (0, 0))
+
+            # Scale and Draw Map
+            scaled_map = pygame.transform.scale(surf, (w * SCALE, h * SCALE))
+            screen.blit(scaled_map, (0, 0))
+
+            # 5. DRAW GAUGE UI
+            gx, gy, gw, gh = (w * SCALE) + 15, 20, 30, (h * SCALE) - 40
+            pygame.draw.rect(screen, (40, 40, 40), (gx, gy, gw, gh)) # BG
+            fill = int(water_level * gh)
+            pygame.draw.rect(screen, (0, 180, 255), (gx, gy + (gh - fill), gw, fill)) # Water
+            pygame.draw.rect(screen, (255, 255, 255), (gx, gy, gw, gh), 2) # Border
+
+            pygame.display.set_caption(f"Trial {trial_num} | Step {step} | Flood: {int(water_level*100)}%")
+            pygame.display.flip()
+            clock.tick(FPS)
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit(); sys.exit()
+
+        # Save Trial Data
+        trial_data = {f'Agent_{i}': agent_scores[i] for i in range(TOTAL_AGENTS)}
+        trial_data['Trial'] = f'Trial {trial_num}'
+        trial_data['Total_Apples'] = sum(agent_scores)
+        all_results.append(trial_data)
+        print(f"Trial {trial_num} End. Total Apples: {sum(agent_scores)}")
+
+    # --- DATA EXPORT & CHARTING ---
+    df = pd.DataFrame(all_results)
+    # Reorder columns to put Trial first
+    cols = ['Trial'] + [f'Agent_{i}' for i in range(TOTAL_AGENTS)] + ['Total_Apples']
+    df = df[cols]
+    df.to_csv('flood_study_results.csv', index=False)
+
+    # Make the Bar Chart
+    plt.figure(figsize=(10, 6))
+    plt.bar(df['Trial'], df['Total_Apples'], color='dodgerblue', edgecolor='navy')
+    plt.title('Total Apples Collected Across 5 Flood Trials', fontsize=14)
+    plt.ylabel('Apples Collected', fontsize=12)
+    plt.grid(axis='y', linestyle='--', alpha=0.6)
+
+    # Label the totals on top of bars
+    for i, val in enumerate(df['Total_Apples']):
+        plt.text(i, val + 1, int(val), ha='center', fontweight='bold')
+
+    plt.savefig('flood_results_chart.png')
+    plt.show()
+    print("\nCSV and Chart generated successfully.")
+
+if __name__ == "__main__":
+    run_study()
