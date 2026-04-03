@@ -1,0 +1,86 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import pygame
+import sys
+from meltingpot.python import substrate
+
+# --- 1. THE DEEP PATCH (Required for > 15 agents) ---
+from meltingpot.python.utils.substrates import colors as base_colors
+import meltingpot.python.configs.substrates.commons_harvest__closed as closed_config
+
+new_palette = list(base_colors.human_readable)
+while len(new_palette) < 60:
+    new_palette.append((150, 150, 150))
+base_colors.human_readable = tuple(new_palette)
+closed_config.colors.human_readable = tuple(new_palette)
+
+# --- 2. CONFIGURATION ---
+SUBSTRATE_NAME = 'commons_harvest__closed'
+AGENT_COUNTS = list(range(1, 48)) # 1, 2, 3, ... 47
+TRIALS_PER_COUNT = 5
+STEPS_PER_TRIAL = 200
+SCALE = 4 # Size of the pop-out window
+
+results = {}
+
+print(f"Starting Granular Experiment: 1 to 47 Agents")
+pygame.init()
+
+# --- 3. THE EXPERIMENT LOOP ---
+for count in AGENT_COUNTS:
+    trial_scores = []
+    print(f"Testing Population: {count}...", end=" ", flush=True)
+
+    for trial in range(TRIALS_PER_COUNT):
+        env = substrate.build(SUBSTRATE_NAME, roles=['default'] * count)
+        timestep = env.reset()
+
+        # We only show the window for the 1st trial of each count to save time
+        show_window = (trial == 0)
+        if show_window:
+            obs = timestep.observation[0]['WORLD.RGB']
+            h, w, _ = obs.shape
+            screen = pygame.display.set_mode((w * SCALE, h * SCALE))
+            pygame.display.set_caption(f"Simulating {count} Agents (Trial 1)")
+
+        total_apples_this_trial = 0
+
+        for step in range(STEPS_PER_TRIAL):
+            actions = [np.random.randint(0, 7) for _ in range(count)]
+            timestep = env.step(actions)
+            total_apples_this_trial += np.sum(timestep.reward)
+
+            if show_window:
+                obs = timestep.observation[0]['WORLD.RGB']
+                surf = pygame.surfarray.make_surface(obs.swapaxes(0, 1))
+                screen.blit(pygame.transform.scale(surf, (w * SCALE, h * SCALE)), (0, 0))
+                pygame.display.flip()
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        pygame.quit(); sys.exit()
+
+        trial_scores.append(total_apples_this_trial)
+
+    avg_score = np.mean(trial_scores)
+    results[count] = avg_score
+    print(f"Avg Apples: {avg_score:.1f}")
+
+# --- 4. GENERATING THE TREND GRAPH ---
+plt.figure(figsize=(12, 6))
+plt.plot(list(results.keys()), list(results.values()), color='#2E7D32', linewidth=2)
+
+plt.title('Collective Apple Harvest vs. Population Density (1-47 Agents)', fontsize=14)
+plt.xlabel('Number of Agents', fontsize=12)
+plt.ylabel('Total Apples Collected (5-Trial Average)', fontsize=12)
+plt.grid(True, linestyle='--', alpha=0.5)
+
+# Highlight the peak
+max_agents = max(results, key=results.get)
+max_apples = results[max_agents]
+plt.annotate(f'Peak: {max_apples:.1f} apples @ {max_agents} agents',
+             xy=(max_agents, max_apples), xytext=(max_agents+2, max_apples+10),
+             arrowprops=dict(facecolor='black', shrink=0.05))
+
+plt.tight_layout()
+plt.savefig('Detailed_Harvest_Trend.png', dpi=300)
+print("\nDone! Graph saved as 'Detailed_Harvest_Trend.png'")
