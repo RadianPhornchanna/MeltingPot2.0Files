@@ -1,0 +1,100 @@
+import numpy as np
+import pandas as pd
+import sys
+
+# --- 1. MATPLOTLIB SETUP ---
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
+# --- 2. THE COLOR PATCH ---
+from meltingpot.python import substrate
+from meltingpot.python.utils.substrates import colors as base_colors
+import meltingpot.python.configs.substrates.commons_harvest__open as open_config
+
+extended_palette = list(base_colors.human_readable)
+while len(extended_palette) < 60:
+    extended_palette.append((120, 120, 120))
+base_colors.human_readable = tuple(extended_palette)
+open_config.colors.human_readable = tuple(extended_palette)
+
+# --- 3. CONFIGURATION ---
+AGENT_COUNTS = [1, 10, 20, 30, 47]
+NUM_STEPS = 2000
+WINDOW_SIZE = 100
+HEADLESS = True
+
+def run_experiment():
+    all_data = []
+
+    for count in AGENT_COUNTS:
+        print(f"🚀 Simulating {count} Agents (NO FLOOD / Peaceful)...")
+        env = substrate.build('commons_harvest__open', roles=['default'] * count)
+        timestep = env.reset()
+
+        total_score = 0
+        score_history = []
+        velocity = []
+
+        for step in range(NUM_STEPS):
+            # --- NO FLOOD LOGIC ---
+            # Agents always move at 100% speed
+            move_ready = True
+
+            # NO BEAMS (0-6)
+            actions = [np.random.randint(0, 7) for _ in range(count)]
+
+            timestep = env.step(actions)
+            current_reward = sum(timestep.reward)
+            total_score += current_reward
+            score_history.append(total_score)
+
+            # Record Velocity every 100 steps
+            if step > 0 and step % WINDOW_SIZE == 0:
+                rate = score_history[step] - score_history[step - WINDOW_SIZE]
+                velocity.append(rate)
+
+        all_data.append({
+            'count': count,
+            'history': score_history,
+            'velocity': velocity,
+            'per_agent': np.array(score_history) / count
+        })
+
+    # --- 4. GENERATING THE 3-PART VISUAL ---
+    print("📊 Generating final charts (No Flood Baseline)...")
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 18))
+
+    for data in all_data:
+        label = f"{data['count']} Agents"
+
+        # Chart 1: Total Apples
+        ax1.plot(data['history'], label=label, linewidth=2)
+
+        # Chart 2: Velocity
+        x_velocity = np.arange(WINDOW_SIZE, (len(data['velocity']) + 1) * WINDOW_SIZE, WINDOW_SIZE)
+        ax2.plot(x_velocity, data['velocity'], label=label, marker='o', markersize=4)
+
+        # Chart 3: Efficiency
+        ax3.plot(data['per_agent'], label=label)
+
+    # Formatting
+    ax1.set_title("Total Apples Collected (No Flood)", fontsize=14)
+    ax1.set_ylabel("Total Apples")
+    ax1.legend(); ax1.grid(True, alpha=0.3)
+
+    ax2.set_title(f"Harvest Velocity (No Flood)", fontsize=14)
+    ax2.set_ylabel("Apples / Interval")
+    ax2.legend(); ax2.grid(True, alpha=0.3)
+
+    ax3.set_title("Individual Efficiency (No Flood)", fontsize=14)
+    ax3.set_ylabel("Apples per Person")
+    ax3.set_xlabel("Steps")
+    ax3.legend(); ax3.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig('no_flood_baseline_3way.png')
+    print("✅ Done! File saved as 'no_flood_baseline_3way.png'")
+
+if __name__ == "__main__":
+    run_experiment()
