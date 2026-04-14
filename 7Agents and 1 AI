@@ -1,0 +1,101 @@
+import numpy as np
+import pygame
+import sys
+import dm_env
+import matplotlib.pyplot as plt
+from meltingpot.python import substrate
+from meltingpot.python.utils.policies import saved_model_policy
+
+# --- 1. CONFIGURATION ---
+SUBSTRATE_NAME = 'commons_harvest__open'
+PLAYER_COUNT = 7
+STEPS = 2000
+ITERATIONS = 1      # Set to 1 so you can just watch one clean trial
+SCALE = 4           # Made larger so you can see details
+SIMULATION_SPEED = 10 # 10 moves per second (Adjust this to go faster/slower)
+MODEL_PATH = '/home/radian/meltingpot/meltingpot/assets/saved_models/commons_harvest__open/pacifist_0'
+WINDOW_SIZE = 100
+
+def run_experiment():
+    pygame.init()
+    # Initialize the clock to control speed
+    clock = pygame.time.Clock()
+    screen = None
+    font = pygame.font.SysFont("Arial", 18, bold=True)
+
+    env = substrate.build(SUBSTRATE_NAME, roles=['default'] * PLAYER_COUNT)
+    agent_brain = saved_model_policy.SavedModelPolicy(MODEL_PATH)
+
+    for run in range(ITERATIONS):
+        print(f"🔄 Starting Visual Run {run+1}...")
+        timestep = env.reset()
+        ai_state = agent_brain.initial_state()
+
+        if screen is None:
+            h, w, _ = timestep.observation[0]['WORLD.RGB'].shape
+            # Window size adjusted for the larger SCALE
+            screen = pygame.display.set_mode((w * SCALE + 200, h * SCALE))
+            pygame.display.set_caption("Watching AI vs Bots (Slow Motion)")
+
+        current_rewards = [0] * PLAYER_COUNT
+        cumulative_community = 0
+
+        for step in range(STEPS):
+            actions = []
+            step_rewards = 0
+
+            for i in range(PLAYER_COUNT):
+                if i == 0:
+                    # AI Agent
+                    ts = dm_env.TimeStep(
+                        step_type=dm_env.StepType.MID if step > 0 else dm_env.StepType.FIRST,
+                        reward=timestep.reward[i],
+                        discount=1.0,
+                        observation=timestep.observation[i]
+                    )
+                    action, ai_state = agent_brain.step(ts, ai_state)
+                else:
+                    # Random Bot
+                    action = np.random.randint(0, 7)
+
+                if action >= 7: action = 0 # Pacifist only
+                actions.append(action)
+
+                current_rewards[i] += timestep.reward[i]
+                step_rewards += timestep.reward[i]
+
+            timestep = env.step(actions)
+            cumulative_community += step_rewards
+
+            # --- LIVE RENDERING (Updated to every step for smoothness) ---
+            obs_map = timestep.observation[0]['WORLD.RGB']
+            surf = pygame.surfarray.make_surface(obs_map.swapaxes(0, 1))
+            screen.fill((20, 20, 20))
+            screen.blit(pygame.transform.scale(surf, (w * SCALE, h * SCALE)), (0, 0))
+
+            stats = [
+                f"Step: {step}",
+                f"Group Total: {int(cumulative_community)}",
+                f"AI (0) Score: {int(current_rewards[0])}",
+                f"Avg Bots: {int(np.mean(current_rewards[1:]))}",
+                f"Speed: {SIMULATION_SPEED} FPS"
+            ]
+            for idx, text in enumerate(stats):
+                color = (0, 255, 150) if "AI" in text else (255, 255, 255)
+                screen.blit(font.render(text, True, color), (w * SCALE + 10, 20 + idx * 30))
+
+            pygame.display.flip()
+
+            # --- THE SPEED REGULATOR ---
+            # This forces the program to wait so you can actually see the moves
+            clock.tick(SIMULATION_SPEED)
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit(); sys.exit()
+
+    pygame.quit()
+    print("✅ Visual Trial Complete.")
+
+if __name__ == "__main__":
+    run_experiment()
