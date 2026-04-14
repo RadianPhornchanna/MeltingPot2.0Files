@@ -1,60 +1,43 @@
-# Melting Pot Resilience Study: The Disruptor Effect
+**Melting Pot 2.0: Multi-Agent Social Dilemma Simulation**
+This project explores Multi-Agent Reinforcement Learning (MARL) using DeepMind's Melting Pot 2.0. The goal is to analyze how trained AI agents navigate social dilemmas—situations where individual greed conflicts with the collective good.
 
-## 📌 Project Overview
-This repository contains a study on the resilience of multi-agent systems using Google DeepMind's **Melting Pot** library. 
+**🎮 Environments Explored**
+Melting Pot 2.0 comes with lots of different kinds of scenarios and social dilemmas to explore. The one I chose is called common_harvest_open because I thought that this social dilemma would be best for my research (this is different for everyone, of course).  
 
-The goal of this experiment is to measure how the "Social Contract" in a commons harvesting environment breaks down when a single agent acts as a **Disruptor**. We compare a standard "Resilience Baseline" against a "Disrupted" environment to analyze changes in collective wealth and wealth inequality.
+The Dilemma: If all agents eat as fast as possible, the resource is permanently depleted. This is the social dilemma. How will they work together to solve this problem? How can we train AI to overcome these kinds of situations? 
 
-## 🛠️ Installation & Setup
-To run these simulations, you must have the Melting Pot environment installed.
 
-```bash
-# Activate your virtual environment
+**🚀 Installation & Setup**
+To replicate these simulations, ensure you have Python 3.10+ and follow these steps:
+
+1. Clone the Repository
+Bash
+git clone https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
+cd YOUR_REPO_NAME
+
+3. Set Up Virtual Environment
+Bash
+python3 -m venv mp_env
 source mp_env/bin/activate
 
-# Install required visualization and data libraries
-pip install pandas matplotlib pygame
-
-How to Run the Experiment
-1. Collect Baseline Data (No Disruptor)
-Run the baseline script 5 times to establish a control group.
-
-Script: run_baseline.py
-
-Action: Update RUN_NUMBER (1 through 5) inside the script before each run.
-
-Output: resilience_baseline_1.csv ... resilience_baseline_5.csv
-
-2. Collect Disrupted Data (With Disruptor)
-Run the disruptor script 5 times. In this mode, Agent 6 is locked into a disruptive behavior pattern.
-
-Script: run_disruptor.py
-
-Action: Update RUN_NUMBER (1 through 5) before each run.
-
-Output: disrupted_1.csv ... disrupted_5.csv
-
-3. Generate Analysis Reports
-Once all 10 CSV files are generated, run the analyzers to produce the final graphs.
-
-
+5. Install Dependencies
 Bash
-python analyze_resilience.py
-python analyze_results.py
-📊 Key Metrics Tracked
-We monitor three primary indicators of system health:
+pip install git+https://github.com/google-deepmind/meltingpot.git
+pip install pygame numpy matplotlib
 
-Collective Wealth: Total apples collected by all agents (Efficiency).
+If any error occurs, have AI help you with debugging!
 
-Gini Index: A statistical measure of wealth inequality (0 = Perfect Equality, 1 = Total Inequality).
+🛠 Running the Simulations
+...TO BE CONTINUED 
 
-Individual Performance: The average final score of each agent to see who benefited from the disruption.
 
-📈 Results Preview
-When the analysis is complete, the following reports are generated:
 
-resilience_baseline_report.png: The system performance under normal conditions.
+**📊 Research Goals**
+Coordination: Can agents learn to overcome each obstacle presented to them without explicit communication?
 
-disruption_analysis_report.png: The system performance under the influence of the Disruptor.
+Conflict Resolution: How does the presence of a "punishment beam" (zapping) affect the stability of the resource? How do they react when storms or extra players are added to the game?
 
-Developed as part of a Multi-Agent Systems Resilience Study.
+
+📜 Acknowledgments
+Developed using the Melting Pot 2.0 suite by Google DeepMind.
+Leibo, J. Z., Edgar, D., Arminsky, A., et al. (2021). Melting Pot 2.0.
