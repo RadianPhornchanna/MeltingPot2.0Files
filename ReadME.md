@@ -10,27 +10,49 @@ The Dilemma: If all agents eat as fast as possible, the resource is permanently 
 **🚀 Installation & Setup**
 To replicate these simulations, ensure you have Python 3.10+ and follow these steps:
 
-1. Clone the Repository
-Bash
-git clone https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
-cd YOUR_REPO_NAME
+**🛠 Prerequisites**
+Operating System: Linux (Ubuntu/Debian recommended)
 
-3. Set Up Virtual Environment
+Python Version: 3.10 or 3.11 (Required for library compatibility)
+
+Bash
+# Install system dependencies
+sudo apt-get update
+sudo apt-get install -y build-essential python3-dev libffi-dev cmake
+
+**1. Create a Clean Virtual Environment**
+Avoid installing directly into your system Python to prevent library conflicts.
+
 Bash
 python3 -m venv mp_env
 source mp_env/bin/activate
 
-5. Install Dependencies
+**2. Update Core Pip Tools**
+Bash
+pip install --upgrade pip setuptools wheel
+**
+**3. Install Melting Pot****
+Install the library directly from the official DeepMind GitHub repository:
+
 Bash
 pip install git+https://github.com/google-deepmind/meltingpot.git
+
+**4. Install Visualization Tools**
+To run the simulation scripts with graphics, you need Pygame:
+
+Bash
 pip install pygame numpy matplotlib
 
-If any error occurs, have AI help you with debugging!
+If any errors occur, have AI help you debug!
 
 🛠 Running the Simulations
-...TO BE CONTINUED 
+If you want to run the various scenarios and games in this repo, all you need to do is first activate your environment. 
 
+source mp_env/bin/activate
 
+If this doesn't work, make sure you have the right folder opened. Also have AI to help if it doesn't work. 
+
+Once the environment is activated, you can run every code in this repo and see the different types of scenarios and situations that were created. 
 
 **📊 Research Goals**
 Coordination: Can agents learn to overcome each obstacle presented to them without explicit communication?
