@@ -1,0 +1,338 @@
+import pygame
+import numpy as np
+
+# ----------------------------
+# CONFIG
+# ----------------------------
+GAME_WIDTH = 900
+CHAT_WIDTH = 250
+WIDTH = GAME_WIDTH + CHAT_WIDTH
+HEIGHT = 900
+
+GRID_SIZE = 30
+FPS = 15
+NUM_AGENTS = 7
+
+FIRE_START_STEP = 60
+FIRE_SPREAD_RATE = 0.04
+
+MAX_APPLES = 30
+NEW_APPLES_PER_STEP = 3
+
+COMM_RADIUS = 6
+
+# ----------------------------
+# MAPS
+# ----------------------------
+fire_map = np.zeros((GRID_SIZE, GRID_SIZE), dtype=np.int32)
+apple_map = np.zeros((GRID_SIZE, GRID_SIZE), dtype=np.int32)
+
+# ----------------------------
+# CHAT
+# ----------------------------
+chat_log = []
+
+def add_chat(msg, color):
+    if len(chat_log) == 0 or chat_log[-1][0] != msg:
+        chat_log.append((msg, color))
+    if len(chat_log) > 20:
+        chat_log.pop(0)
+
+# ----------------------------
+# SHELTER
+# ----------------------------
+SHELTER_X = GRID_SIZE - 6
+SHELTER_Y = GRID_SIZE // 2 - 3
+SHELTER_W = 5
+SHELTER_H = 6
+
+def in_shelter(x, y):
+    return (
+        SHELTER_X <= x < SHELTER_X + SHELTER_W and
+        SHELTER_Y <= y < SHELTER_Y + SHELTER_H
+    )
+
+# ----------------------------
+# FIRE
+# ----------------------------
+def init_fire():
+    fire_map[:, 0] = 1
+
+def spread_fire():
+    new_map = fire_map.copy()
+    for y in range(GRID_SIZE):
+        for x in range(GRID_SIZE):
+            if fire_map[y][x] == 1:
+                for dy, dx in [(-1,0),(1,0),(0,-1),(0,1)]:
+                    ny, nx = y+dy, x+dx
+                    if 0 <= ny < GRID_SIZE and 0 <= nx < GRID_SIZE:
+                        if np.random.rand() < FIRE_SPREAD_RATE:
+                            new_map[ny][nx] = 1
+    fire_map[:] = new_map
+
+def fire_reached_right():
+    return np.any(fire_map[:, GRID_SIZE-2:] == 1)
+
+# ----------------------------
+# APPLES
+# ----------------------------
+def spawn_apples():
+    if np.sum(apple_map) > MAX_APPLES:
+        return
+    for _ in range(NEW_APPLES_PER_STEP):
+        x = np.random.randint(0, GRID_SIZE)
+        y = np.random.randint(0, GRID_SIZE)
+        if apple_map[y][x] == 0 and fire_map[y][x] == 0:
+            apple_map[y][x] = 1
+
+# ----------------------------
+# AGENTS
+# ----------------------------
+agent_positions = []
+agent_messages = []
+agent_sprites = []
+agent_scores = []
+
+def create_agent_sprite(color):
+    surf = pygame.Surface((32,32), pygame.SRCALPHA)
+    pygame.draw.rect(surf, color, (10,14,12,12))
+    pygame.draw.circle(surf, (255,220,180), (16,10), 6)
+    pygame.draw.circle(surf, (0,0,0), (14,9), 1)
+    pygame.draw.circle(surf, (0,0,0), (18,9), 1)
+    return surf
+
+def init_agents():
+    global agent_positions, agent_messages, agent_sprites, agent_scores
+
+    colors = [
+        (220,50,50),(50,200,50),(50,100,220),
+        (230,220,50),(200,50,200),(50,220,220),(200,120,60)
+    ]
+
+    for i in range(NUM_AGENTS):
+        agent_positions.append([
+            np.random.randint(3,10),
+            np.random.randint(3,GRID_SIZE-3)
+        ])
+        agent_messages.append(None)
+        agent_sprites.append(create_agent_sprite(colors[i]))
+        agent_scores.append(0)
+
+# ----------------------------
+# HELPERS
+# ----------------------------
+def fire_near(x, y):
+    for dy in range(-2,3):
+        for dx in range(-2,3):
+            ny, nx = y+dy, x+dx
+            if 0 <= ny < GRID_SIZE and 0 <= nx < GRID_SIZE:
+                if fire_map[ny][nx] == 1:
+                    return True
+    return False
+
+def find_nearest_apple(x, y):
+    for r in range(1,5):
+        for dy in range(-r,r+1):
+            for dx in range(-r,r+1):
+                ny, nx = y+dy, x+dx
+                if 0 <= ny < GRID_SIZE and 0 <= nx < GRID_SIZE:
+                    if apple_map[ny][nx] == 1:
+                        return nx, ny
+    return None
+
+# ----------------------------
+# COMMUNICATION
+# ----------------------------
+def broadcast_messages():
+    for i in range(NUM_AGENTS):
+        x,y = agent_positions[i]
+
+        if fire_near(x,y):
+            agent_messages[i] = "FIRE"
+            add_chat(f"Agent {i}: FIRE!", (255,0,0))
+
+        elif find_nearest_apple(x,y):
+            agent_messages[i] = "APPLE"
+            add_chat(f"Agent {i}: Apples nearby", (0,255,0))
+        else:
+            agent_messages[i] = None
+
+# ----------------------------
+# MOVEMENT
+# ----------------------------
+def move_agent(i, action):
+    if action == 0:
+        return  # stay still
+
+    x,y = agent_positions[i]
+
+    if action == 1: y -= 1
+    elif action == 2: y += 1
+    elif action == 3: x -= 1
+    elif action == 4: x += 1
+
+    x = max(0,min(GRID_SIZE-1,x))
+    y = max(0,min(GRID_SIZE-1,y))
+    agent_positions[i] = [x,y]
+
+# ----------------------------
+# BEHAVIOR
+# ----------------------------
+def get_action(i):
+    x,y = agent_positions[i]
+
+    # 🔒 stay if inside shelter
+    if in_shelter(x,y):
+        return 0
+
+    # 🚨 forced evacuation (strong, no randomness)
+    if fire_reached_right():
+        target_x = SHELTER_X + SHELTER_W // 2
+        target_y = SHELTER_Y + SHELTER_H // 2
+
+        if abs(target_x - x) > abs(target_y - y):
+            return 4 if target_x > x else 3
+        else:
+            return 2 if target_y > y else 1
+
+    # 🔥 avoid fire
+    if fire_near(x,y):
+        return 4
+
+    # 🍎 go to apple
+    target = find_nearest_apple(x,y)
+    if target:
+        tx,ty = target
+        if tx > x: return 4
+        if tx < x: return 3
+        if ty > y: return 2
+        if ty < y: return 1
+
+    return np.random.choice([1,2,3,4])
+
+# ----------------------------
+# DRAW
+# ----------------------------
+def draw_grid(screen):
+    cell = GAME_WIDTH // GRID_SIZE
+
+    for y in range(GRID_SIZE):
+        for x in range(GRID_SIZE):
+            cx = x * cell
+            cy = y * cell
+
+            if fire_map[y][x] == 1:
+                pygame.draw.rect(screen, (180,40,0), (cx,cy,cell,cell))
+                pygame.draw.circle(screen,
+                    (255,np.random.randint(80,140),0),
+                    (cx+cell//2,cy+cell//2),
+                    cell//2)
+                pygame.draw.circle(screen,
+                    (255,200,50),
+                    (cx+cell//2,cy+cell//2),
+                    cell//4)
+            else:
+                pygame.draw.rect(screen, (230,220,200), (cx,cy,cell,cell))
+
+def draw_apples(screen):
+    cell = GAME_WIDTH // GRID_SIZE
+
+    for y in range(GRID_SIZE):
+        for x in range(GRID_SIZE):
+            if apple_map[y][x] == 1:
+                cx = x*cell + cell//2
+                cy = y*cell + cell//2
+
+                pygame.draw.circle(screen, (200,0,0), (cx,cy), cell//3)
+                pygame.draw.circle(screen, (255,80,80), (cx-2,cy-2), cell//5)
+                pygame.draw.line(screen, (60,40,0),
+                                 (cx, cy-cell//3),
+                                 (cx, cy-cell//2), 2)
+
+def draw_shelter(screen):
+    cell = GAME_WIDTH // GRID_SIZE
+    rect = pygame.Rect(
+        SHELTER_X*cell,
+        SHELTER_Y*cell,
+        SHELTER_W*cell,
+        SHELTER_H*cell
+    )
+    pygame.draw.rect(screen,(180,220,255),rect)
+    pygame.draw.rect(screen,(0,100,200),rect,3)
+
+def draw_agents(screen):
+    cell = GAME_WIDTH // GRID_SIZE
+
+    for i,(x,y) in enumerate(agent_positions):
+        cx = x*cell + cell//2
+        cy = y*cell + cell//2
+
+        sprite = pygame.transform.scale(agent_sprites[i], (cell,cell))
+        screen.blit(sprite,(cx-cell//2,cy-cell//2))
+
+        if agent_messages[i] == "FIRE":
+            pygame.draw.circle(screen,(255,0,0),(cx,cy-cell//2),6)
+        elif agent_messages[i] == "APPLE":
+            pygame.draw.circle(screen,(0,255,0),(cx,cy-cell//2),6)
+
+def draw_chat(screen, font):
+    pygame.draw.rect(screen,(30,30,30),(GAME_WIDTH,0,CHAT_WIDTH,HEIGHT))
+
+    y = 20
+    for msg,color in chat_log:
+        text = font.render(msg,True,color)
+        screen.blit(text,(GAME_WIDTH+10,y))
+        y += 20
+
+# ----------------------------
+# MAIN
+# ----------------------------
+def run():
+    pygame.init()
+    screen = pygame.display.set_mode((WIDTH,HEIGHT))
+    font = pygame.font.SysFont(None,20)
+    clock = pygame.time.Clock()
+
+    init_fire()
+    init_agents()
+
+    step = 0
+    running = True
+
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+
+        if step > FIRE_START_STEP:
+            spread_fire()
+
+        spawn_apples()
+        broadcast_messages()
+
+        for i in range(NUM_AGENTS):
+            move_agent(i, get_action(i))
+
+            x,y = agent_positions[i]
+
+            # 🍎 PICKUP
+            if apple_map[y][x] == 1:
+                apple_map[y][x] = 0
+                agent_scores[i] += 1
+                add_chat(f"Agent {i} picked up an apple!", (255,100,100))
+
+        screen.fill((0,0,0))
+        draw_grid(screen)
+        draw_apples(screen)
+        draw_shelter(screen)
+        draw_agents(screen)
+        draw_chat(screen, font)
+
+        pygame.display.flip()
+        clock.tick(FPS)
+        step += 1
+
+    pygame.quit()
+
+if __name__ == "__main__":
+    run()
